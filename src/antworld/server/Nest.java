@@ -123,6 +123,10 @@ public class Nest extends NestData implements Serializable
     { 
       if (type != FoodType.WATER) score += foodStockPile[type.ordinal()];
     }
+    for (AntData ant : antList)
+    {
+      if (ant.alive) score+= AntType.TOTAL_FOOD_UNITS_TO_SPAWN/2;
+    }
     return score;
   }
   

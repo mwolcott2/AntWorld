@@ -52,12 +52,12 @@ public enum AntType
   private static final FoodType[] WORKER_FOOD = {FoodType.SEEDS};
 
 
-
+  public static final int TOTAL_FOOD_UNITS_TO_SPAWN = 10;
 
   public int getFoodUnitsToSpawn(FoodType type)
   {
     FoodType[] birthFood = getBirthFood();
-    int units = 10/birthFood.length;
+    int units = TOTAL_FOOD_UNITS_TO_SPAWN/birthFood.length;
     for (FoodType food : birthFood)
     {
       if (type == food) return units;
