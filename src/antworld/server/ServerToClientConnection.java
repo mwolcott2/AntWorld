@@ -56,19 +56,7 @@ public class ServerToClientConnection extends Thread
   
   public static long getPassword(TeamNameEnum team)
   {
-    if (team == null) return -1;
-    long a = 19682;
-    long c = 4339335;
-    long m = 1099511627776L;
-    String str = team.toString();
-    long x = str.charAt(0);
-    
-    for (int i=0; i<str.length(); i++)
-    {
-      x = ((x+str.charAt(i))*a + c) % m;
-    }
-    
-    return x;
+    return 1;
   }
   
   
@@ -103,16 +91,17 @@ public class ServerToClientConnection extends Thread
         closeSocket(activeCommData.errorMsg);
         return;
       }
-      
-      if ((data.password < 0) || (data.password != getPassword(data.myTeam)))
-      {
-        System.err.println("ServerToClientConnection() Missmatch in Teamname : password="+ data.password);
-        activeCommData.errorMsg = "Missmatch in Teamname : password";
-        activeCommData.myNest = null;
-        send(activeCommData);
-        closeSocket(activeCommData.errorMsg);
-        return;
-      }
+
+      //Password checking since the tourney will be live
+      //if ((data.password < 0) || (data.password != getPassword(data.myTeam)))
+      //{
+      // System.err.println("ServerToClientConnection() Missmatch in Teamname : password="+ data.password);
+      //  activeCommData.errorMsg = "Missmatch in Teamname : password";
+      //  activeCommData.myNest = null;
+      //  send(activeCommData);
+      //  closeSocket(activeCommData.errorMsg);
+      //  return;
+      //}
       
       
       this.myNestName = data.myNest;
