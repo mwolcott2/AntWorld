@@ -6,10 +6,8 @@ import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Random;
-
 import javax.swing.Timer;
 import javax.swing.JFrame;
-
 import antworld.common.AntData;
 import antworld.common.CommData;
 import antworld.common.Constants;
@@ -28,8 +26,8 @@ import antworld.renderer.Renderer;
 public class AntWorld implements ActionListener
 {
   public static Random random = Constants.random;
-  public static final int FRAME_WIDTH = 1024;// 640;//
-  public static final int FRAME_HEIGHT = 768; // 480;//
+  public static final int FRAME_WIDTH = 1200;
+  public static final int FRAME_HEIGHT = 700;
 
   public final boolean showGUI;
 
@@ -42,6 +40,7 @@ public class AntWorld implements ActionListener
 
   private static final int BLOCK_SIZE = 100;
   private final int worldWidth, worldHeight;
+  private final int worldWidthInBlocks, worldHeightInBlocks;
   private Cell[][] world;
   private HashSet<AntData>[][] antBlocks;
   private HashSet<FoodData>[][] foodBlocks;
@@ -57,21 +56,31 @@ public class AntWorld implements ActionListener
     this.showGUI = showGUI;
     System.out.println(title);
 
-    drawPanel = new Renderer(title, FRAME_WIDTH, FRAME_HEIGHT);
-    JFrame window = drawPanel.window;
+    JFrame window = null;
+    if (showGUI)
+    { drawPanel = new Renderer(this, title, FRAME_WIDTH, FRAME_HEIGHT);
+      window = drawPanel.window;
+    }
 
-    // BufferedImage map = loadImage("small.png", window);
+    //********************* Note On map replacement  **************************
+    //The map must have at least a one pixel a boarder of water: LandType.WATER.getColor.
     BufferedImage map = Util.loadImage("AntWorld.png", window);
     worldWidth = map.getWidth();
     worldHeight = map.getHeight();
+
+
+    worldWidthInBlocks  = (int) Math.ceil((double) worldWidth / BLOCK_SIZE);
+    worldHeightInBlocks = (int) Math.ceil((double) worldHeight / BLOCK_SIZE);
+
     readAntWorld(map);
 
     if (restorePoint == null)
     {
-      createFoodSpawnSites();
-      WorldRestore.writeFoodSpawnSites(foodSpawnList);
-      System.out.println("AntWorld.loadFoodSites()...."
-        + foodSpawnList.size());
+      foodSpawnList = new ArrayList<FoodSpawnSite>();
+      createFoodSpawnSite();
+      //WorldRestore.writeFoodSpawnSites(foodSpawnList);
+      //System.out.println("AntWorld.loadFoodSites()...."
+      //  + foodSpawnList.size());
     }
     else
     {
@@ -101,32 +110,40 @@ public class AntWorld implements ActionListener
       }
     }
 
-    drawPanel.initWorld(world, worldWidth, worldHeight);
-    drawPanel.repaint();
-
     createHashMapsOfGameObjects();
+
+    if (showGUI)
+    {
+      drawPanel.initWorld(world, worldWidth, worldHeight);
+      drawPanel.repaint();
+    }
 
     gameTimer = new Timer(Constants.TIME_STEP_MSEC, this);
 
     System.out.println("Done Initializing AntWorld");
     server = new Server(this, nestList);
     server.start();
-    dataViewer = new DataViewer(nestList);
+    if (showGUI)
+    {
+      dataViewer = new DataViewer(nestList);
+    }
 
     gameTimer.start();
   }
 
+  public int getWorldWidthInBlocks() {return worldWidthInBlocks;}
+  public int getWorldHeightInBlocks() {return worldHeightInBlocks;}
+  public HashSet<FoodData>[][] getFoodBlocks() {return foodBlocks;}
+  public ArrayList<FoodSpawnSite> getFoodSpawnList() {return foodSpawnList;}
+  public ArrayList<Nest> getNestList() {return nestList;}
+
   private void createHashMapsOfGameObjects()
   {
-    antBlocks = new HashSet[(int) Math.ceil((double) worldWidth
-      / BLOCK_SIZE)][(int) Math.ceil((double) worldHeight
-      / BLOCK_SIZE)];
-    foodBlocks = new HashSet[(int) Math.ceil((double) worldWidth
-      / BLOCK_SIZE)][(int) Math.ceil((double) worldHeight
-      / BLOCK_SIZE)];
-    for (int i = 0; i < Math.ceil((double) worldWidth / BLOCK_SIZE); ++i)
+    antBlocks  = new HashSet[worldWidthInBlocks][worldHeightInBlocks];
+    foodBlocks = new HashSet[worldWidthInBlocks][worldHeightInBlocks];
+    for (int i = 0; i < worldWidthInBlocks; ++i)
     {
-      for (int j = 0; j < Math.ceil((double) worldHeight / BLOCK_SIZE); ++j)
+      for (int j = 0; j < worldHeightInBlocks; ++j)
       {
         antBlocks[i][j] = new HashSet<AntData>();
         foodBlocks[i][j] = new HashSet<FoodData>();
@@ -138,22 +155,9 @@ public class AntWorld implements ActionListener
       ArrayList<AntData> antList = myNest.getAntList();
       for (AntData ant : antList)
       {
-        ant.id = Ant.restoreAntID_Hack();
-        // addAnt(ant);
+        ant.id = Ant.getNewID();
       }
     }
-
-//		for (FoodSpawnSite spawnSite : foodSpawnList) {
-//			ArrayList<FoodData> foodList = spawnSite.getFoodList();
-//			for (FoodData food : foodList) {
-//			  if (food.getCount() <= 0) 
-//			  { System.out.println("****ERROR**** " + food);
-//			  
-//				  addFood(spawnSite, food);
-//			  }
-//			}
-//		}
-
   }
 
   public int getWorldWidth()
@@ -181,6 +185,15 @@ public class AntWorld implements ActionListener
   {
     return nestList.get(name.ordinal());
   }
+  public Nest getNest(TeamNameEnum name)
+  {
+    for (Nest nest : nestList)
+    {
+      if (nest.team == name) return nest;
+    }
+    return null;
+  }
+
 
   public long getWallClockAtLastUpdateStart()
   {
@@ -192,25 +205,39 @@ public class AntWorld implements ActionListener
     return gameTick;
   }
 
+
+  /**
+   * Uses the given map image to create the world including world size, nest
+   * locations and all terrain.
+   * @param map Must have the following properties:
+   * <ol>
+   *     <li>The map must have at least a one pixel a boarder of water:
+   *              LandType.WATER.getColor</li>
+   *
+   *     <li>The map must have at least one pixel of 0x0 to define the nest.</li>
+   *     <li>Each nest (pixel with 0x0 color) must be at least 2xNEST_RADIUS distant from each other nest.</li>
+   *     <li>Map images must be resized using nearest neighbor NOT any type of interpolation or
+   *            averaging which will create shades that are undefined.</li>
+   *     <li>Map images must be saved in a lossless format (i.e. png).</li>
+   *            </ol>
+   */
   private void readAntWorld(BufferedImage map)
   {
-
     world = new Cell[worldWidth][worldHeight];
     for (int x = 0; x < worldWidth; x++)
     {
       for (int y = 0; y < worldHeight; y++)
       {
         int rgb = (map.getRGB(x, y) & 0x00FFFFFF);
-        LandType landType = LandType.GRASS;
+        LandType landType;
         int height = 0;
         if (rgb == 0x0)
         {
           landType = LandType.NEST;
-          NestNameEnum nestName = NestNameEnum.values()[Nest
-            .getNextID()];
+          NestNameEnum nestName = NestNameEnum.values()[Nest.getNextID()];
           nestList.add(new Nest(nestName, x, y));
         }
-        if (rgb == 0xF0E68C)
+        else if (rgb == 0xF0E68C)
         {
           landType = LandType.NEST;
         }
@@ -219,10 +246,8 @@ public class AntWorld implements ActionListener
           landType = LandType.WATER;
         }
         else
-        {
-          int g = (rgb & 0x0000FF00) >> 8;
-
-          height = g - 55;
+        { landType = LandType.GRASS;
+          height=LandType.getMapHeight(rgb);
         }
         // System.out.println("("+x+","+y+") rgb="+rgb +
         // ", landType="+landType
@@ -286,7 +311,7 @@ public class AntWorld implements ActionListener
     world[x][y].setAnt(ant);
     antBlocks[x / BLOCK_SIZE][y / BLOCK_SIZE].add(ant);
 
-    drawPanel.drawCell(world[x][y]);
+    if (drawPanel != null) drawPanel.drawCell(world[x][y]);
   }
 
   public void addFood(FoodSpawnSite foodSpawnSite, FoodData food)
@@ -297,7 +322,7 @@ public class AntWorld implements ActionListener
     world[x][y].setFood(foodSpawnSite, food);
     foodBlocks[x / BLOCK_SIZE][y / BLOCK_SIZE].add(food);
 
-    drawPanel.drawCell(world[x][y]);
+    if (drawPanel != null) drawPanel.drawCell(world[x][y]);
   }
 
   public void removeAnt(AntData ant)
@@ -309,7 +334,7 @@ public class AntWorld implements ActionListener
 
     world[x][y].setAnt(null);
     antBlocks[x / BLOCK_SIZE][y / BLOCK_SIZE].remove(ant);
-    drawPanel.drawCell(world[x][y]);
+    if (drawPanel != null) drawPanel.drawCell(world[x][y]);
   }
 
   public void removeFood(FoodData food)
@@ -321,7 +346,7 @@ public class AntWorld implements ActionListener
 
     world[x][y].setFood(null, null);
     foodBlocks[x / BLOCK_SIZE][y / BLOCK_SIZE].remove(food);
-    drawPanel.drawCell(world[x][y]);
+    if (drawPanel != null) drawPanel.drawCell(world[x][y]);
   }
 
   public void removeGameObj(GameObject obj)
@@ -343,8 +368,10 @@ public class AntWorld implements ActionListener
     ant.gridX = to.getLocationX();
     ant.gridY = to.getLocationY();
 
-    drawPanel.drawCell(from);
-    drawPanel.drawCell(to);
+    if (drawPanel != null)
+    {  drawPanel.drawCell(from);
+       drawPanel.drawCell(to);
+    }
     antBlocks[from.getLocationX() / BLOCK_SIZE][from.getLocationY()
       / BLOCK_SIZE].remove(ant);
     antBlocks[to.getLocationX() / BLOCK_SIZE][to.getLocationY()
@@ -505,8 +532,10 @@ public class AntWorld implements ActionListener
       }
     }
 
-    drawPanel.update(nestList);
-    dataViewer.update(nestList);
+    if (drawPanel != null)
+    {  drawPanel.update();
+      dataViewer.update(nestList);
+    }
 
     if (wallClock >= lastRestoreTime + RESTORE_FREQUENCY)
     {
@@ -515,27 +544,25 @@ public class AntWorld implements ActionListener
     }
   }
 
-  private void createFoodSpawnSites()
+  private void createFoodSpawnSite()
   {
-    foodSpawnList = new ArrayList<FoodSpawnSite>();
-
-    int totalSitesToSpawn = nestList.size()/2;
+    int totalSitesToSpawn = 3 + random.nextInt(3);
+    int xRange = worldWidth/totalSitesToSpawn;
     while (totalSitesToSpawn > 0)
     {
-      int nestIdx1 = random.nextInt(nestList.size());
-      int nestIdx2 = random.nextInt(nestList.size());
-      double weight = 0.3333 + random.nextDouble()/3.0;
-
-      Nest nest1 = nestList.get(nestIdx1);
-      Nest nest2 = nestList.get(nestIdx2);
-      int spawnX = (int)(weight*nest1.getCenterX() + (1-weight)*nest2.getCenterX());
-      int spawnY = (int)(weight*nest1.getCenterY() + (1-weight)*nest2.getCenterY());
+      int spawnX = random.nextInt(xRange);
+      spawnX = spawnX + (totalSitesToSpawn-1)*xRange;
+      int spawnY = random.nextInt(worldHeight);
 
       if (world[spawnX][spawnY].getLandType() == LandType.GRASS)
       {
-        FoodType foodType = FoodType.getRandomFood();
+        FoodType foodType;
+        if (foodSpawnList.size() == 0) foodType=FoodType.MEAT;
+        else if (foodSpawnList.size() == 1) foodType=FoodType.SEEDS;
+        else if (foodSpawnList.size() == 2) foodType=FoodType.NECTAR;
+        else foodType = FoodType.getRandomFood();
         foodSpawnList.add(new FoodSpawnSite(foodType, spawnX, spawnY, nestList.size()));
-        System.out.println("FoodSpawnSite: [ " + spawnX + ", " + spawnY + "] " + foodType);
+        //System.out.println("FoodSpawnSite: [ " + spawnX + ", " + spawnY + "] " + foodType);
         totalSitesToSpawn--;
       }
     }
@@ -572,15 +599,15 @@ public class AntWorld implements ActionListener
 
   public static void main(String[] args)
   {
-
-    //new AntWorld(true, "restore/AntWorld_RestorePoint_2014-09-19.09-51.dat");
-    new AntWorld(true, null);
-
-    // for (TeamNameEnum team: TeamNameEnum.values())
-    // {
-    // System.out.println("team="+team +
-    // ", s="+ServerToClientConnection.getPassword(team));
-    // }
+    boolean showGUI = true;
+    if (args != null && args.length > 0)
+    {
+      for (String field : args)
+      {
+        if (field.equals("-nogui"))  showGUI = false;
+      }
+    }
+    new AntWorld(showGUI, null);
   }
 
 }
