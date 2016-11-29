@@ -16,7 +16,7 @@ import antworld.common.NestNameEnum;
 import antworld.common.TeamNameEnum;
 import antworld.common.AntAction.AntActionType;
 
-public class ClientRandomWalk
+public class ClientForrestGeneticWalk
 {
   private static final boolean DEBUG = true;
   private final TeamNameEnum myTeam;
@@ -37,17 +37,29 @@ public class ClientRandomWalk
   private static Random random = Constants.random;
 
 
-  public ClientRandomWalk(String host, int portNumber, TeamNameEnum team)
+  public ClientForrestGeneticWalk(String host, int portNumber, TeamNameEnum team)
   {
     myTeam = team;
     System.out.println("Starting " + team +" on " + host + ":" + portNumber + " at "
       + System.currentTimeMillis());
 
     isConnected = openConnection(host, portNumber);
-    if (!isConnected) System.exit(0);
+    if (!isConnected)
+    {
+      System.exit(0);
+    }
     CommData data = obtainNest();
     mainGameLoop(data);
     closeAll();
+  }
+
+  private void debugPrint(String message)
+  {
+    if(!DEBUG)
+    {
+      return;
+    }
+    System.out.println(message);
   }
 
   private boolean openConnection(String host, int portNumber)
@@ -58,13 +70,13 @@ public class ClientRandomWalk
     }
     catch (UnknownHostException e)
     {
-      System.err.println("ClientRandomWalk Error: Unknown Host " + host);
+      System.err.println("ClientForrestGeneticWalk Error: Unknown Host " + host);
       e.printStackTrace();
       return false;
     }
     catch (IOException e)
     {
-      System.err.println("ClientRandomWalk Error: Could not open connection to " + host + " on port " + portNumber);
+      System.err.println("ClientForrestGeneticWalk Error: Could not open connection to " + host + " on port " + portNumber);
       e.printStackTrace();
       return false;
     }
@@ -77,7 +89,7 @@ public class ClientRandomWalk
     }
     catch (IOException e)
     {
-      System.err.println("ClientRandomWalk Error: Could not open i/o streams");
+      System.err.println("ClientForrestGeneticWalk Error: Could not open i/o streams");
       e.printStackTrace();
       return false;
     }
@@ -88,17 +100,23 @@ public class ClientRandomWalk
 
   public void closeAll()
   {
-    System.out.println("ClientRandomWalk.closeAll()");
+    this.debugPrint("ClientForrestGeneticWalk.closeAll()");
     {
       try
       {
-        if (outputStream != null) outputStream.close();
-        if (inputStream != null) inputStream.close();
+        if (outputStream != null)
+        {
+          outputStream.close();
+        }
+        if (inputStream != null)
+        {
+          inputStream.close();
+        }
         clientSocket.close();
       }
       catch (IOException e)
       {
-        System.err.println("ClientRandomWalk Error: Could not close");
+        System.err.println("ClientForrestGeneticWalk Error: Could not close");
         e.printStackTrace();
       }
     }
@@ -111,49 +129,47 @@ public class ClientRandomWalk
    */
   public CommData obtainNest()
   {
-      CommData data = new CommData(myTeam);
-      data.password = password;
-
-      if( sendCommData(data) )
+    CommData data = new CommData(myTeam);
+    data.password = password;
+    if(sendCommData(data))
+    {
+      try
       {
-        try
+        this.debugPrint("ClientForrestGeneticWalk: listening to socket....");
+        data = (CommData) inputStream.readObject();
+        this.debugPrint("ClientForrestGeneticWalk: received <<<<<<<<<"+inputStream.available()+"<...\n" + data);
+
+        if (data.errorMsg != null)
         {
-          if (DEBUG) System.out.println("ClientRandomWalk: listening to socket....");
-          data = (CommData) inputStream.readObject();
-          if (DEBUG) System.out.println("ClientRandomWalk: received <<<<<<<<<"+inputStream.available()+"<...\n" + data);
-          
-          if (data.errorMsg != null)
-          {
-            System.err.println("ClientRandomWalk***ERROR***: " + data.errorMsg);
-            System.exit(0);
-          }
-        }
-        catch (IOException e)
-        {
-          System.err.println("ClientRandomWalk***ERROR***: client read failed");
-          e.printStackTrace();
+          System.err.println("ClientForrestGeneticWalk***ERROR***: " + data.errorMsg);
           System.exit(0);
         }
-        catch (ClassNotFoundException e)
-        {
-          System.err.println("ClientRandomWalk***ERROR***: client sent incorrect common format");
-        }
       }
+      catch (IOException e)
+      {
+        System.err.println("ClientForrestGeneticWalk***ERROR***: client read failed");
+        e.printStackTrace();
+        System.exit(0);
+      }
+      catch (ClassNotFoundException e)
+      {
+       System.err.println("ClientForrestGeneticWalk***ERROR***: client sent incorrect common format");
+      }
+    }
     if (data.myTeam != myTeam)
     {
-      System.err.println("ClientRandomWalk***ERROR***: Server returned wrong team name: "+data.myTeam);
+      System.err.println("ClientForrestGeneticWalk***ERROR***: Server returned wrong team name: "+data.myTeam);
       System.exit(0);
     }
     if (data.myNest == null)
     {
-      System.err.println("ClientRandomWalk***ERROR***: Server returned NULL nest");
+      System.err.println("ClientForrestGeneticWalk***ERROR***: Server returned NULL nest");
       System.exit(0);
     }
-
-    myNestName = data.myNest;
-    centerX = data.nestData[myNestName.ordinal()].centerX;
-    centerY = data.nestData[myNestName.ordinal()].centerY;
-    System.out.println("ClientRandomWalk: ==== Nest Assigned ===>: " + myNestName);
+    this.myNestName = data.myNest;
+    this.centerX = data.nestData[this.myNestName.ordinal()].centerX;
+    this.centerY = data.nestData[this.myNestName.ordinal()].centerY;
+    this.debugPrint("ClientForrestGeneticWalk: ==== Nest Assigned ===>: " + this.myNestName);
     return data;
   }
     
@@ -163,34 +179,32 @@ public class ClientRandomWalk
     { 
       try
       {
-
-        if (DEBUG) System.out.println("ClientRandomWalk: chooseActions: " + myNestName);
+        this.debugPrint("ClientForrestGeneticWalk: chooseActions: " + this.myNestName);
 
         chooseActionsOfAllAnts(data);  
 
         CommData sendData = data.packageForSendToServer();
         
-        System.out.println("ClientRandomWalk: Sending>>>>>>>: " + sendData);
+        System.out.println("ClientForrestGeneticWalk: Sending>>>>>>>: " + sendData);
         outputStream.writeObject(sendData);
         outputStream.flush();
         outputStream.reset();
        
-
-        if (DEBUG) System.out.println("ClientRandomWalk: listening to socket....");
+        this.debugPrint("ClientForrestGeneticWalk: listening to socket....");
         CommData receivedData = (CommData) inputStream.readObject();
-        if (DEBUG) System.out.println("ClientRandomWalk: received <<<<<<<<<"+inputStream.available()+"<...\n" + receivedData);
+        this.debugPrint("ClientForrestGeneticWalk: received <<<<<<<<<"+inputStream.available()+"<...\n" + receivedData);
         data = receivedData;
   
         
         
         if ((myNestName == null) || (data.myTeam != myTeam))
         {
-          System.err.println("ClientRandomWalk: !!!!ERROR!!!! " + myNestName);
+          System.err.println("ClientForrestGeneticWalk: !!!!ERROR!!!! " + myNestName);
         }
       }
       catch (IOException e)
       {
-        System.err.println("ClientRandomWalk***ERROR***: client read failed");
+        System.err.println("ClientForrestGeneticWalk***ERROR***: client read failed");
         e.printStackTrace();
         System.exit(0);
 
@@ -212,14 +226,14 @@ public class ClientRandomWalk
     CommData sendData = data.packageForSendToServer();
     try
     {
-      if (DEBUG) System.out.println("ClientRandomWalk.sendCommData(" + sendData +")");
+      this.debugPrint("ClientForrestGeneticWalk.sendCommData(" + sendData +")");
       outputStream.writeObject(sendData);
       outputStream.flush();
       outputStream.reset();
     }
     catch (IOException e)
     {
-      System.err.println("ClientRandomWalk***ERROR***: client read failed");
+      System.err.println("ClientForrestGeneticWalk***ERROR***: client read failed");
       e.printStackTrace();
       System.exit(0);
     }
@@ -306,9 +320,12 @@ public class ClientRandomWalk
   {
     AntAction action = new AntAction(AntActionType.STASIS);
     
-    if (ant.ticksUntilNextAction > 0) return action;
+    if (ant.ticksUntilNextAction > 0) 
+    {
+      return action;
+    }
 
-    if (exitNest(ant, action)) return action;
+    else if (exitNest(ant, action)) return action;
 
     if (attackAdjacent(ant, action)) return action;
 
@@ -340,18 +357,14 @@ public class ClientRandomWalk
   public static void main(String[] args)
   {
     String serverHost = "localhost";
-    if (args.length > 0)
-    {
-      serverHost = args[args.length -1];
-    }
+    if (args.length > 0) serverHost = args[args.length -1];
 
     TeamNameEnum team = TeamNameEnum.RANDOM_WALKERS;
     if (args.length > 1)
-    {
-      team = TeamNameEnum.getTeamByString(args[0]);
+    { team = TeamNameEnum.getTeamByString(args[0]);
     }
 
-    new ClientRandomWalk(serverHost, Constants.PORT, team);
+    new ClientForrestGeneticWalk(serverHost, Constants.PORT, team);
   }
 
 }
